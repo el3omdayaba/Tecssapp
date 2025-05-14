@@ -17,14 +17,14 @@ const getNextHeroId = async () => {
   return `hero_${current}`;
 };
 
-// 🧾 Cleaned signup — no hero_0 fallback, no founder checks
-export const signUpHero = async (email, password, referrerId = null) => {
+// 🧾 Signup now accepts hero_0 or any valid referrer
+export const signUpHero = async (email, password, referrerId = "hero_0") => {
   const uid = await getNextHeroId();
   const user = {
     uid,
     email,
     password,
-    referred_by: referrerId || null,
+    referred_by: referrerId,
     created_at: new Date(),
   };
 

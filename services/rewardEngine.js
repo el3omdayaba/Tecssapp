@@ -11,7 +11,7 @@ import { calculateTSSAReward } from "./rewardMath.js";
 
 /**
  * Distributes TSSA rewards only to users in the same branch (validated via REFERRAL_PATHS).
- * Optionally gives hero_0 a fixed 1.0 TSSA per referral, if hero_0 exists.
+ * Rewards hero_0 only once — either as part of the path or separately if not already rewarded.
  */
 export async function distributeTSSARewards(referralChain, newUserId) {
   const rewards = [];
@@ -27,6 +27,8 @@ export async function distributeTSSARewards(referralChain, newUserId) {
     console.warn(`🚫 No referralPath for ${newUserId} — rewards may be skipped`);
   }
 
+  let founderRewarded = false;
+
   for (let i = 0; i < referralChain.length; i++) {
     const heroId = referralChain[i];
 
@@ -36,7 +38,8 @@ export async function distributeTSSARewards(referralChain, newUserId) {
     }
 
     const level = i + 1;
-    const amount = calculateTSSAReward(level);
+    const amount = heroId === "hero_0" ? 1.0 : calculateTSSAReward(level);
+
 
     if (amount <= 0) {
       console.warn(`⚠️ Skipping reward for ${heroId} at level ${level} — invalid amount: ${amount}`);
@@ -58,30 +61,36 @@ export async function distributeTSSARewards(referralChain, newUserId) {
 
     console.log(`✅ ${heroId} rewarded ${amount} TSSA from ${newUserId} at level ${level}`);
     rewards.push(reward);
+
+    if (heroId === "hero_0") {
+      founderRewarded = true;
+    }
   }
 
-  // ✅ Optional: Reward hero_0 if he exists
-  const founderRef = doc(db, "USERS", "hero_0");
-  const founderSnap = await getDoc(founderRef);
+  // ✅ If hero_0 wasn't in the chain, reward him separately
+  if (!founderRewarded) {
+    const founderRef = doc(db, "USERS", "hero_0");
+    const founderSnap = await getDoc(founderRef);
 
-  if (founderSnap.exists()) {
-    const founderReward = {
-      heroId: "hero_0",
-      amount: 1.0,
-      source: newUserId,
-      level: referralChain.length + 1,
-      timestamp: serverTimestamp(),
-    };
+    if (founderSnap.exists()) {
+      const founderReward = {
+        heroId: "hero_0",
+        amount: 1.0,
+        source: newUserId,
+        level: referralChain.length + 1,
+        timestamp: serverTimestamp(),
+      };
 
-    await setDoc(doc(db, "REWARDS", `hero_0_${newUserId}`), founderReward);
-    await updateDoc(founderRef, {
-      tssa_balance: increment(1.0),
-    });
+      await setDoc(doc(db, "REWARDS", `hero_0_${newUserId}`), founderReward);
+      await updateDoc(founderRef, {
+        tssa_balance: increment(1.0),
+      });
 
-    console.log(`🏛️ Founder (hero_0) rewarded 1.0 TSSA from ${newUserId}`);
-    rewards.push(founderReward);
-  } else {
-    console.log("ℹ️ Skipped founder reward — hero_0 does not exist");
+      console.log(`🏛️ Founder (hero_0) rewarded 1.0 TSSA from ${newUserId}`);
+      rewards.push(founderReward);
+    } else {
+      console.log("ℹ️ Skipped founder reward — hero_0 does not exist");
+    }
   }
 
   console.log("🪙 Final Rewards written to Firestore:", rewards);

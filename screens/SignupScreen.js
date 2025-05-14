@@ -30,7 +30,6 @@ export default function SignupScreen({ initialReferralCode }) {
 
     const cleanedEmail = email.trim().toLowerCase();
     const cleanedPassword = password.trim();
-    const finalReferrer = referralCode.trim() || initialReferralCode || null;
 
     if (cleanedEmail.length < 4 || cleanedPassword.length < 4) {
       Alert.alert("Missing Fields", "Email and password must be at least 4 characters.");
@@ -42,13 +41,13 @@ export default function SignupScreen({ initialReferralCode }) {
       return;
     }
 
+    const finalReferrer = referralCode.trim() || initialReferralCode || "hero_0";
+
     try {
       const user = await signUpHero(cleanedEmail, cleanedPassword, finalReferrer);
 
-      // Only run referral logic if there *was* a referrer
-      if (user.referred_by) {
-        await processReferral(user.referred_by, user.uid);
-      }
+      // Always run referral logic, since hero_0 is now part of the chain
+      await processReferral(user.referred_by, user.uid);
 
       Alert.alert("Signup Successful", user.email);
     } catch (error) {

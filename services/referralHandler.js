@@ -12,7 +12,7 @@ import { distributeTSSARewards } from "./rewardEngine.js";
 
 /**
  * Handles referral logic:
- * - builds referral path manually
+ * - builds referral path manually (ends in hero_0)
  * - stores path in REFERRAL_PATHS
  * - stores direct referrals in REFERRALS
  * - tracks direct_referrals in USERS
@@ -31,21 +31,24 @@ export async function processReferral(referrerId, newUserId) {
     const referralPath = [];
     let currentId = referrerId;
 
-    while (currentId && currentId !== "hero_0") {
+    while (currentId) {
       referralPath.push(currentId);
       const snap = await getDoc(doc(db, "USERS", currentId));
       if (!snap.exists()) break;
-      currentId = snap.data().referred_by;
+
+      const next = snap.data().referred_by;
+      if (!next || referralPath.includes(next)) break; // prevent cycles
+      currentId = next;
     }
 
-    if (currentId === "hero_0") {
+    // ✅ Ensure hero_0 is at the end (root)
+    if (!referralPath.includes("hero_0")) {
       referralPath.push("hero_0");
     }
 
     const heroLevel = referralPath.length;
     const newUserDoc = doc(db, "USERS", newUserId);
 
-    // ✅ Safely merge new referral info without deleting existing fields like email
     await setDoc(
       newUserDoc,
       {
