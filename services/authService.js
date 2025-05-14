@@ -1,29 +1,34 @@
 // services/authService.js
 
-import { getFirestore, doc, setDoc } from "firebase/firestore";
+import { doc, setDoc, getDoc } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 
-let heroCounter = 1; // 🔢 Simple mock counter for hero IDs
+// 🔢 Firestore-based persistent hero ID generator
+const getNextHeroId = async () => {
+  const counterRef = doc(db, "SYSTEM", "heroCounter");
+  const counterSnap = await getDoc(counterRef);
 
-/**
- * Simulates hero sign up and writes to USERS collection.
- * @param {string} email
- * @param {string} password
- * @param {string} referrerId (e.g. "hero_0")
- * @returns user object with uid, email, password, referrer, timestamp
- */
-export const signUpHero = async (email, password, referrerId = "hero_0") => {
-  const uid = `hero_${heroCounter++}`;
+  let current = 1;
+  if (counterSnap.exists()) {
+    current = counterSnap.data().count || 1;
+  }
+
+  await setDoc(counterRef, { count: current + 1 });
+  return `hero_${current}`;
+};
+
+// 🧾 Cleaned signup — no hero_0 fallback, no founder checks
+export const signUpHero = async (email, password, referrerId = null) => {
+  const uid = await getNextHeroId();
   const user = {
     uid,
     email,
     password,
-    referred_by: referrerId,
+    referred_by: referrerId || null,
     created_at: new Date(),
   };
 
   await setDoc(doc(db, "USERS", uid), user);
-
-  console.log("[Mock Signup] Hero created:", user);
+  console.log("✅ Hero created:", user);
   return user;
 };

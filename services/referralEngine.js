@@ -1,32 +1,27 @@
-// services/referralEngine.js
-
 import { db } from "../firebaseConfig.js";
 import { doc, getDoc } from "firebase/firestore";
 
 /**
- * Recursively builds the referral chain starting from the given referrerId.
- * Returns an array of IDs [closestReferrer, ..., hero_0] — ordered from near to far.
+ * Fetches the referral chain (upstream IDs) for a given hero.
+ * Returns an array ordered from closest referrer → up to hero_0.
  */
-export async function getReferralChain(startingReferrerId) {
-  const chain = [];
-  let currentId = startingReferrerId;
-
-  while (currentId && currentId !== "hero_0") {
-    chain.push(currentId);
-
-    const snapshot = await getDoc(doc(db, "USERS", currentId));
+export async function getReferralChain(heroId) {
+  try {
+    const snapshot = await getDoc(doc(db, "REFERRAL_PATHS", heroId));
     if (!snapshot.exists()) {
-      console.warn(`⚠️ Referrer not found: ${currentId}`);
-      break;
+      console.warn(`⚠️ No referral path found for ${heroId}`);
+      return [];
     }
 
-    currentId = snapshot.data().referred_by;
-  }
+    const data = snapshot.data();
+    if (!Array.isArray(data.upstream)) {
+      console.warn(`⚠️ referralPath malformed for ${heroId}`);
+      return [];
+    }
 
-  // Always include hero_0 if we reached them
-  if (currentId === "hero_0") {
-    chain.push("hero_0");
+    return data.upstream;
+  } catch (error) {
+    console.error("❌ Failed to fetch referral chain:", error);
+    return [];
   }
-
-  return chain;
 }
