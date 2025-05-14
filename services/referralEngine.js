@@ -1,9 +1,14 @@
+// services/referralEngine.js
+
 import { db } from "../firebaseConfig.js";
 import { doc, getDoc } from "firebase/firestore";
 
 /**
- * Fetches the referral chain (upstream IDs) for a given hero.
- * Returns an array ordered from closest referrer → up to hero_0.
+ * 📚 Returns the upstream referral chain for a given hero.
+ * Ordered: closest referrer → up to "hero_0".
+ *
+ * @param {string} heroId - Hero ID of the user (e.g. "hero_27")
+ * @returns {string[]} - Array of ancestor hero IDs, including "hero_0"
  */
 export async function getReferralChain(heroId) {
   try {
@@ -13,13 +18,14 @@ export async function getReferralChain(heroId) {
       return [];
     }
 
-    const data = snapshot.data();
-    if (!Array.isArray(data.upstream)) {
+    const { upstream } = snapshot.data();
+
+    if (!Array.isArray(upstream)) {
       console.warn(`⚠️ referralPath malformed for ${heroId}`);
       return [];
     }
 
-    return data.upstream;
+    return upstream;
   } catch (error) {
     console.error("❌ Failed to fetch referral chain:", error);
     return [];

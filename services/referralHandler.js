@@ -1,3 +1,5 @@
+// services/referralHandler.js
+
 import {
   doc,
   getDoc,
@@ -11,14 +13,13 @@ import { getReferralChain } from "./referralEngine.js";
 import { distributeTSSARewards } from "./rewardEngine.js";
 
 /**
- * Handles referral logic:
- * - builds referral path manually (ends in hero_0)
- * - stores path in REFERRAL_PATHS
- * - stores direct referrals in REFERRALS
- * - tracks direct_referrals in USERS
- * - adds hero_level to new user
- * - distributes TSSA rewards
- * - gives 1 TSSA signup reward to new user
+ * 🔁 Fully handles referral registration logic:
+ * - Builds and saves the upstream referral path
+ * - Stores direct referral in REFERRALS
+ * - Tracks direct_referrals count in USERS
+ * - Writes hero_level to new user
+ * - Distributes TSSA to the chain
+ * - Adds 1.0 TSSA to the new user as signup reward
  */
 export async function processReferral(referrerId, newUserId) {
   try {
@@ -28,58 +29,53 @@ export async function processReferral(referrerId, newUserId) {
       return;
     }
 
-    const referralPath = [];
-    let currentId = referrerId;
+    // 🔗 1. Build upstream referral path
+    const referralPath = await getReferralChain(referrerId);
 
-    while (currentId) {
-      referralPath.push(currentId);
-      const snap = await getDoc(doc(db, "USERS", currentId));
-      if (!snap.exists()) break;
-
-      const next = snap.data().referred_by;
-      if (!next || referralPath.includes(next)) break; // prevent cycles
-      currentId = next;
-    }
-
-    // ✅ Ensure hero_0 is at the end (root)
+    // Ensure "hero_0" is included
     if (!referralPath.includes("hero_0")) {
       referralPath.push("hero_0");
     }
 
     const heroLevel = referralPath.length;
-    const newUserDoc = doc(db, "USERS", newUserId);
 
+    // 🧾 2. Update new user's record with level + referrer
+    const newUserRef = doc(db, "USERS", newUserId);
     await setDoc(
-      newUserDoc,
+      newUserRef,
       {
-        hero_id: newUserId,
         referred_by: referrerId,
         hero_level: heroLevel,
       },
       { merge: true }
     );
 
+    // 📚 3. Save referral path to REFERRAL_PATHS
     await setDoc(doc(db, "REFERRAL_PATHS", newUserId), {
       upstream: referralPath,
     });
 
+    // 🌱 4. Save direct referral
     await setDoc(
       doc(db, "REFERRALS", referrerId),
-      {
-        direct: arrayUnion(newUserId),
-      },
+      { direct: arrayUnion(newUserId) },
       { merge: true }
     );
 
+    // 📊 5. Increment referrer's direct count
     await updateDoc(doc(db, "USERS", referrerId), {
       direct_referrals: increment(1),
     });
 
-    await distributeTSSARewards(referralPath, newUserId);
+    // 🪙 6. Distribute TSSA to the referral chain
+    await distributeTSSARewards(referrerId, newUserId);
 
-    await updateDoc(newUserDoc, {
+    // 🎁 7. Give the new user 1.0 TSSA as a welcome reward
+    await updateDoc(newUserRef, {
       tssa_balance: increment(1.0),
     });
+
+    console.log(`🌟 Referral processed for ${newUserId}`);
   } catch (error) {
     console.error("❌ Referral processing failed:", error);
     throw error;
